@@ -1,22 +1,22 @@
-/* Map Challenge — playful clean design */
+/* Map Challenge — earthy theme */
 :root{
-  --bg:#fff7f2; --card:#ffffff; --ink:#2c2c3e; --muted:#8d8ba3;
-  --accent:#ff6b9d; --accent-ink:#ffffff; --blue:#3fa7ff;
-  --good:#2fbf71; --bad:#ff5d5d; --line:#f3e4d8;
-  --land:#dcebfb; --land-stroke:#a9c6e8; --hover:#b9d9f7;
-  --shadow:0 6px 20px rgba(255,107,157,.12);
+  --bg:#f5f0e6; --card:#fffdf8; --ink:#3a3129; --muted:#8a7a64;
+  --accent:#b4663a; --accent-ink:#fffaf2; --blue:#3f6b5e;
+  --good:#5e8f5a; --bad:#b04a3a; --line:#e3d5bd;
+  --land:#dfe3cf; --land-stroke:#a9b18c; --hover:#cdd6b4;
+  --shadow:0 6px 20px rgba(122,90,58,.14);
 }
 [data-theme="dark"]{
-  --bg:#15151d; --card:#20202c; --ink:#f4f2fb; --muted:#9c9cb4;
-  --accent:#ff7fae; --blue:#5db4ff;
-  --good:#3fd68a; --bad:#ff7070; --line:#33333f;
-  --land:#2b3648; --land-stroke:#4a5a72; --hover:#3b4c66;
-  --shadow:0 6px 20px rgba(0,0,0,.35);
+  --bg:#1e1a14; --card:#2a241c; --ink:#efe6d4; --muted:#a2937a;
+  --accent:#d08a4e; --blue:#7ba08e;
+  --good:#7fae7a; --bad:#d0695a; --line:#3d342a;
+  --land:#3a3f2e; --land-stroke:#5c6647; --hover:#4a5238;
+  --shadow:0 6px 20px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;}
 body{
-  font-family:ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
   background:var(--bg); color:var(--ink); min-height:100vh;
   touch-action:manipulation;
 }
@@ -48,7 +48,7 @@ body{
 }
 .card .thumb svg{width:100%;height:100%;display:block;}
 .card .thumb path{fill:var(--land);stroke:var(--land-stroke);stroke-width:1.5;}
-.card .thumb path.hl{fill:var(--accent);stroke:#d14d7e;stroke-width:1.5;}
+.card .thumb path.hl{fill:var(--accent);stroke:#8f4e2a;stroke-width:1.5;}
 .card h3{margin:0;font-size:1.02rem;text-align:center;}
 .card .stats{margin:0;text-align:center;color:var(--muted);font-size:.85rem;min-height:2.4em;}
 .card-btns{display:flex;gap:8px;}
@@ -93,7 +93,7 @@ body{
 #map path.region.missed{fill:var(--bad);stroke:#c93a3a;cursor:default;opacity:.75;}
 #learn-map path.region{cursor:default;}
 #learn-map path.region.target{
-  fill:var(--accent);stroke:#d14d7e;stroke-width:2;
+  fill:var(--accent);stroke:#8f4e2a;stroke-width:2;
   animation:targetpulse 1.2s infinite;
 }
 @keyframes targetpulse{50%{opacity:.55;}}
