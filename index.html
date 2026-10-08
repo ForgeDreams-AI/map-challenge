@@ -32,11 +32,17 @@
   <!-- GAME -->
   <section id="view-game" class="view hidden">
     <div class="hud">
-      <span id="hud-progress" class="hud-chip">0 / 0</span>
+      <span id="hud-score" class="hud-chip" title="Score">0 / 0</span>
       <span id="hud-timer" class="hud-chip timer">30:00</span>
       <span id="hud-wrong" class="hud-chip wrong">❌ 0/3</span>
     </div>
-    <div id="map-wrap"><svg id="map" role="img" aria-label="Quiz map"></svg></div>
+    <div id="map-wrap"><svg id="map" role="img" aria-label="Quiz map"></svg>
+      <div class="zoom-ctrls">
+        <button id="zoom-in" aria-label="Zoom in">+</button>
+        <button id="zoom-out" aria-label="Zoom out">&minus;</button>
+        <button id="zoom-reset" aria-label="Reset zoom">&#8635;</button>
+      </div>
+    </div>
     <div id="answer-panel" class="answer-panel hidden">
       <div id="answer-q" class="answer-q"></div>
       <div class="ac-wrap">

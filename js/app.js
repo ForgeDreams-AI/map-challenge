@@ -162,6 +162,100 @@ function showContinentPicker(modeId){
   showView('view-continent');
 }
 
+/* ---------------- map zoom (map only — never the page) ---------------- */
+const ZMAX = 12; // max zoom: enough to tap the tiniest countries
+function svgPoint(svg, clientX, clientY){
+  const m = svg.getScreenCTM();
+  if(!m) return null;
+  return new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
+}
+function initZoom(svg, base){
+  const z = {scale:1, cx:base.x + base.w/2, cy:base.y + base.h/2, suppress:false};
+  function apply(){
+    const w = base.w / z.scale, h = base.h / z.scale;
+    z.cx = Math.max(base.x + w/2, Math.min(base.x + base.w - w/2, z.cx));
+    z.cy = Math.max(base.y + h/2, Math.min(base.y + base.h - h/2, z.cy));
+    svg.setAttribute('viewBox', `${z.cx - w/2} ${z.cy - h/2} ${w} ${h}`);
+  }
+  function zoomAt(pt, factor){
+    if(!pt) return;
+    const ns = Math.max(1, Math.min(ZMAX, z.scale * factor));
+    if(ns === z.scale) return;
+    const k = z.scale / ns; // keep the pinch/dbl-tap point anchored
+    z.cx = pt.x + (z.cx - pt.x) * k;
+    z.cy = pt.y + (z.cy - pt.y) * k;
+    z.scale = ns;
+    apply();
+  }
+  function zoomCenter(factor){
+    const r = svg.getBoundingClientRect();
+    zoomAt(svgPoint(svg, r.left + r.width/2, r.top + r.height/2), factor);
+  }
+  function reset(){
+    z.scale = 1; z.cx = base.x + base.w/2; z.cy = base.y + base.h/2; apply();
+  }
+  // pinch to zoom + drag to pan (single-finger drag only pans when zoomed in)
+  const ptrs = new Map();
+  let pinchD0 = 0, pinchS0 = 1, moved = false, pinched = false, downX = 0, downY = 0;
+  let lastTapT = 0, lastTapX = 0, lastTapY = 0;
+  svg.addEventListener('pointerdown', e => {
+    try { svg.setPointerCapture(e.pointerId); } catch(err){}
+    ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    moved = false; pinched = false; downX = e.clientX; downY = e.clientY;
+    if(ptrs.size === 2){
+      const a = [...ptrs.values()];
+      pinchD0 = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      pinchS0 = z.scale; pinched = true;
+    }
+  });
+  svg.addEventListener('pointermove', e => {
+    if(!ptrs.has(e.pointerId)) return;
+    const prev = ptrs.get(e.pointerId);
+    ptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(ptrs.size === 2){
+      const a = [...ptrs.values()];
+      const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      if(pinchD0 > 0){
+        const midX = (a[0].x + a[1].x)/2, midY = (a[0].y + a[1].y)/2;
+        zoomAt(svgPoint(svg, midX, midY), (pinchS0 * (d / pinchD0)) / z.scale);
+      }
+      moved = true;
+    } else if(ptrs.size === 1 && z.scale > 1){
+      if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 8) moved = true;
+      if(moved){
+        const r = svg.getBoundingClientRect();
+        const vbw = (base.w / z.scale), vbh = (base.h / z.scale);
+        z.cx -= (e.clientX - prev.x) * (vbw / r.width);
+        z.cy -= (e.clientY - prev.y) * (vbh / r.height);
+        apply();
+      }
+    }
+  });
+  function endPointer(e){
+    ptrs.delete(e.pointerId);
+    if(ptrs.size !== 0) return;
+    const now = Date.now();
+    const quickSecondTap = !moved && !pinched && (now - lastTapT < 350) &&
+      Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 24;
+    if(quickSecondTap){
+      // double-tap: zoom in on the tapped point (don't select a region)
+      zoomAt(svgPoint(svg, e.clientX, e.clientY), 2.2);
+      z.suppress = true; lastTapT = 0;
+    } else {
+      lastTapT = now; lastTapX = e.clientX; lastTapY = e.clientY;
+      if(moved || pinched) z.suppress = true; // a pan/pinch is not a tap
+    }
+  }
+  svg.addEventListener('pointerup', endPointer);
+  svg.addEventListener('pointercancel', endPointer);
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoomAt(svgPoint(svg, e.clientX, e.clientY), e.deltaY < 0 ? 1.3 : 1/1.3);
+  }, {passive:false});
+  svg._zoom = z;
+  return {zoomCenter, reset};
+}
+
 /* ---------------- game engine ---------------- */
 let G = null;
 function startGame(modeId, continent){
@@ -179,7 +273,9 @@ function startGame(modeId, continent){
   G = {modeId, title:m.title + (continent ? ' — ' + continent : ''), answerKind:m.answer,
        places, byId, correct:new Set(), missed:new Set(), wrong:0,
        timeLeft:1800, timerId:null, selected:null, continent};
-  $('hud-progress').textContent = `0 / ${places.length}`;
+  const [bx, by, bw, bh] = vb.split(' ').map(Number);
+  G.zoom = initZoom(svg, {x:bx, y:by, w:bw, h:bh});
+  $('hud-score').textContent = `0 / ${places.length}`;
   $('hud-wrong').textContent = '❌ 0/3';
   updateTimer();
   hideAnswer();
@@ -259,20 +355,13 @@ function submitAnswer(){
     hideAnswer();
     if(G.wrong >= 3){ endGame('lives'); return; }
   }
-  $('hud-progress').textContent = `${G.correct.size} / ${G.places.length}`;
+  $('hud-score').textContent = `${G.correct.size} / ${G.places.length}`;
   if(G.correct.size + G.missed.size >= G.places.length) endGame('done');
 }
 function skipSelected(){
+  // Skip just closes the panel — the region stays unanswered so you can come back later.
   if(!G || !G.selected) return;
-  const id = G.selected;
-  G.missed.add(id);
-  practiceAdd(G.modeId, id);
-  regionEls().forEach(p => {
-    if(p.getAttribute('data-id') === id) p.classList.add('missed');
-  });
   hideAnswer();
-  $('hud-progress').textContent = `${G.correct.size} / ${G.places.length}`;
-  if(G.correct.size + G.missed.size >= G.places.length) endGame('done');
 }
 function endGame(reason){
   if(!G) return;
@@ -285,13 +374,14 @@ function endGame(reason){
   const gs = gameStore(G.modeId);
   gs.scores.push(score); gs.scores = gs.scores.slice(-3);
   gs.best = Math.max(gs.best, score); gs.played++;
+  gs.bestScore = Math.max(gs.bestScore || 0, G.correct.size);
   saveStore();
   $('res-title').textContent = G.title;
-  $('res-score').textContent = score + '%';
+  $('res-score').textContent = `${G.correct.size}/${total}`;
   const why = reason==='lives' ? '3 wrong answers — game over!'
             : reason==='time' ? 'Time up!' : 'You named them all! 🎉';
-  $('res-detail').textContent = `${why} ${G.correct.size} of ${total} correct, ${G.wrong} wrong.`;
-  $('res-best').textContent = `Best: ${gs.best}% • Games played: ${gs.played} • Last 3 avg: ${Math.round(gs.scores.reduce((a,b)=>a+b,0)/gs.scores.length)}%`;
+  $('res-detail').textContent = `${why} ${score}% correct, ${G.wrong} wrong.`;
+  $('res-best').textContent = `Best score: ${gs.bestScore} • Best: ${gs.best}% • Games played: ${gs.played} • Last 3 avg: ${Math.round(gs.scores.reduce((a,b)=>a+b,0)/gs.scores.length)}%`;
   $('res-copied').classList.add('hidden');
   const mid = G.modeId, cont = G.continent;
   $('res-again').onclick = () => startGame(mid, cont);
@@ -504,6 +594,14 @@ function init(){
   $('continent-back').addEventListener('click', () => showView('view-home'));
   $('answer-submit').addEventListener('click', submitAnswer);
   $('answer-skip').addEventListener('click', skipSelected);
+  // swallow the tap that ends a pan/pinch/double-tap-zoom so it never selects a region
+  $('map-wrap').addEventListener('click', e => {
+    const z = $('map')._zoom;
+    if(z && z.suppress){ e.stopPropagation(); e.preventDefault(); z.suppress = false; }
+  }, true);
+  $('zoom-in').addEventListener('click', () => { if(G && G.zoom) G.zoom.zoomCenter(1.6); });
+  $('zoom-out').addEventListener('click', () => { if(G && G.zoom) G.zoom.zoomCenter(1/1.6); });
+  $('zoom-reset').addEventListener('click', () => { if(G && G.zoom) G.zoom.reset(); });
   $('answer-input').addEventListener('keydown', e => {
     if(e.key === 'Enter' && $('ac-list').classList.contains('hidden')) submitAnswer();
   });
