@@ -160,6 +160,12 @@ body{
 #view-continent h2{text-align:center;}
 #continent-back{display:block;margin:18px auto 0;}
 
+@media (orientation:landscape) and (max-height:500px){
+  /* landscape phone: let the map use the short screen height */
+  #map,#learn-map{max-height:82vh;}
+  .view{padding-bottom:20px;}
+}
+
 @media (min-width:700px){
   .cards{grid-template-columns:repeat(3,1fr);}
   .topbar h1{font-size:2rem;}
