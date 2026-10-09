@@ -119,7 +119,8 @@ function statsLine(id){
   const g = gameStore(id);
   if(!g.played) return 'Not played yet';
   const avg = Math.round(g.scores.reduce((a,b)=>a+b,0)/g.scores.length);
-  return `Avg ${avg}% • Best ${g.best}% • ${g.played} played`;
+  const best = g.bestTotal ? `Best ${g.bestScore}/${g.bestTotal}` : `Best ${g.best}%`;
+  return `Avg ${avg}% • ${best} • ${g.played} played`;
 }
 function renderHome(){
   const wrap = $('cards'); wrap.innerHTML = '';
@@ -162,6 +163,38 @@ function showContinentPicker(modeId){
   showView('view-continent');
 }
 
+/* ---------------- fat-finger hit areas for tiny countries ---------------- */
+const HIT_MIN_PX = 16;  // minimum on-screen hit radius, px
+const SMALL_DIAG = 16;  // svg units: bbox diagonal below this => tiny country
+function addHitAreas(svg){
+  const NS = 'http://www.w3.org/2000/svg';
+  svg.querySelectorAll('path.region').forEach(p => {
+    let b; try { b = p.getBBox(); } catch(e){ return; }
+    const diag = Math.hypot(b.width, b.height);
+    if(diag >= SMALL_DIAG) return;
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('class', 'hit');
+    c.setAttribute('data-id', p.getAttribute('data-id'));
+    c.setAttribute('cx', (b.x + b.width/2).toFixed(1));
+    c.setAttribute('cy', (b.y + b.height/2).toFixed(1));
+    c.setAttribute('r', Math.max(diag/2*1.6, 8).toFixed(1));
+    c.dataset.diag = diag.toFixed(1);
+    svg.appendChild(c);
+  });
+}
+function sizeHitAreas(svg){
+  // keep hit circles >= HIT_MIN_PX on screen at any zoom level
+  const r = svg.getBoundingClientRect();
+  if(!r.width) return;
+  const vb = svg.viewBox.baseVal;
+  if(!vb || !vb.width) return;
+  const pxPerUnit = vb.width / r.width;
+  svg.querySelectorAll('circle.hit').forEach(c => {
+    const diag = parseFloat(c.dataset.diag || '0');
+    c.setAttribute('r', Math.max(HIT_MIN_PX * pxPerUnit, (diag/2) * 1.6).toFixed(1));
+  });
+}
+
 /* ---------------- map zoom (map only — never the page) ---------------- */
 const ZMAX = 12; // max zoom: enough to tap the tiniest countries
 function svgPoint(svg, clientX, clientY){
@@ -176,6 +209,7 @@ function initZoom(svg, base){
     z.cx = Math.max(base.x + w/2, Math.min(base.x + base.w - w/2, z.cx));
     z.cy = Math.max(base.y + h/2, Math.min(base.y + base.h - h/2, z.cy));
     svg.setAttribute('viewBox', `${z.cx - w/2} ${z.cy - h/2} ${w} ${h}`);
+    sizeHitAreas(svg);
   }
   function zoomAt(pt, factor){
     if(!pt) return;
@@ -270,6 +304,7 @@ function startGame(modeId, continent){
   svg.innerHTML = places.map(p =>
     `<path class="region" data-id="${p.id}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`
   ).join('');
+  // addHitAreas runs after showView below (getBBox needs layout)
   G = {modeId, title:m.title + (continent ? ' — ' + continent : ''), answerKind:m.answer,
        places, byId, correct:new Set(), missed:new Set(), wrong:0,
        timeLeft:1800, timerId:null, selected:null, continent};
@@ -280,6 +315,8 @@ function startGame(modeId, continent){
   updateTimer();
   hideAnswer();
   showView('view-game');
+  addHitAreas(svg); // needs layout for getBBox
+  sizeHitAreas(svg); // svg now has real dimensions
   clearInterval(G.timerId);
   G.timerId = setInterval(tick, 1000);
 }
@@ -300,16 +337,15 @@ function updateTimer(){
 function regionEls(){ return $('map').querySelectorAll('path.region'); }
 
 $('map').addEventListener('click', e => {
-  const path = e.target.closest('path.region');
-  if(!path || !G) return;
-  const id = path.getAttribute('data-id');
+  const t = e.target.closest('[data-id]');
+  if(!t || !G) return;
+  const id = t.getAttribute('data-id');
   if(G.correct.has(id) || G.missed.has(id)) return;
-  selectRegion(id, path);
+  selectRegion(id);
 });
-function selectRegion(id, path){
+function selectRegion(id){
   G.selected = id;
-  regionEls().forEach(p => p.classList.remove('selected'));
-  path.classList.add('selected');
+  regionEls().forEach(p => p.classList.toggle('selected', p.getAttribute('data-id') === id));
   const place = G.byId.get(id);
   $('answer-q').textContent = G.answerKind === 'capital'
     ? `What is the capital of ${place.name}?`
@@ -374,21 +410,44 @@ function endGame(reason){
   const gs = gameStore(G.modeId);
   gs.scores.push(score); gs.scores = gs.scores.slice(-3);
   gs.best = Math.max(gs.best, score); gs.played++;
-  gs.bestScore = Math.max(gs.bestScore || 0, G.correct.size);
+  if(G.correct.size > (gs.bestScore || 0)){ gs.bestScore = G.correct.size; gs.bestTotal = total; }
   saveStore();
   $('res-title').textContent = G.title;
   $('res-score').textContent = `${G.correct.size}/${total}`;
   const why = reason==='lives' ? '3 wrong answers — game over!'
             : reason==='time' ? 'Time up!' : 'You named them all! 🎉';
   $('res-detail').textContent = `${why} ${score}% correct, ${G.wrong} wrong.`;
-  $('res-best').textContent = `Best score: ${gs.bestScore} • Best: ${gs.best}% • Games played: ${gs.played} • Last 3 avg: ${Math.round(gs.scores.reduce((a,b)=>a+b,0)/gs.scores.length)}%`;
+  $('res-best').textContent = `Best score: ${gs.bestScore}${gs.bestTotal ? '/' + gs.bestTotal : ''} • Best: ${gs.best}% • Games played: ${gs.played} • Last 3 avg: ${Math.round(gs.scores.reduce((a,b)=>a+b,0)/gs.scores.length)}%`;
   $('res-copied').classList.add('hidden');
   const mid = G.modeId, cont = G.continent;
   $('res-again').onclick = () => startGame(mid, cont);
   $('res-learn').onclick = () => startLearn(mid);
   showView('view-results');
+  renderResultsMap(); // after showView: getBBox needs layout
   renderHome();
   G = null;
+}
+/* results map: green = got it, red = missed, gray = not asked (fit to asked places) */
+function renderResultsMap(){
+  const svg = $('res-map');
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  svg.innerHTML = G.places.map(p => {
+    const cls = G.correct.has(p.id) ? 'correct' : G.missed.has(p.id) ? 'missed' : 'unasked';
+    return `<path class="${cls}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`;
+  }).join('');
+  svg.querySelectorAll('path').forEach(el => {
+    try{
+      const b = el.getBBox();
+      minX=Math.min(minX,b.x); minY=Math.min(minY,b.y);
+      maxX=Math.max(maxX,b.x+b.width); maxY=Math.max(maxY,b.y+b.height);
+    }catch(e){}
+  });
+  if(!isFinite(minX)){
+    svg.setAttribute('viewBox', `0 0 ${window.WORLD_DATA.w} ${window.WORLD_DATA.h}`);
+    return;
+  }
+  const pad = Math.max(24, (maxX-minX)*0.1);
+  svg.setAttribute('viewBox', `${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);
 }
 function shareResult(){
   const title = $('res-title').textContent;
