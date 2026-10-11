@@ -105,10 +105,9 @@ function thumbSVG(thumb){
     return `<svg viewBox="0 0 ${U.w} ${U.h}">${paths}</svg>`;
   }
   if(thumb === 'continent'){
-    const all = W.c.map(c => `<path d="${c.p}"/>`).join('');
-    const afr = W.c.filter(c => c.k === 'Africa')
-      .map(c => `<path class="hl" d="${c.p}"/>`).join('');
-    return `<svg viewBox="0 0 ${W.w} ${W.h}">${all}${afr}</svg>`;
+    // same full-world art as the other cards (no single-continent highlight)
+    const paths = W.c.map(c => `<path d="${c.p}"/>`).join('');
+    return `<svg viewBox="0 0 ${W.w} ${W.h}">${paths}</svg>`;
   }
   const paths = W.c.map(c => `<path d="${c.p}"/>`).join('');
   return `<svg viewBox="0 0 ${W.w} ${W.h}">${paths}</svg>`;
@@ -213,7 +212,7 @@ function svgPoint(svg, clientX, clientY){
   return new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
 }
 function initZoom(svg, base){
-  const z = {scale:1, cx:base.x + base.w/2, cy:base.y + base.h/2, suppress:false};
+  const z = {scale:1, cx:base.x + base.w/2, cy:base.y + base.h/2};
   function apply(){
     const w = base.w / z.scale, h = base.h / z.scale;
     z.cx = Math.max(base.x + w/2, Math.min(base.x + base.w - w/2, z.cx));
@@ -284,10 +283,12 @@ function initZoom(svg, base){
     if(quickSecondTap){
       // double-tap: zoom in on the tapped point (don't select a region)
       zoomAt(svgPoint(svg, e.clientX, e.clientY), 2.2);
-      z.suppress = true; lastTapT = 0;
+      lastTapT = 0;
     } else {
       lastTapT = now; lastTapX = e.clientX; lastTapY = e.clientY;
-      if(moved || pinched) z.suppress = true; // a pan/pinch is not a tap
+      // a pan/pinch is not a tap; a clean tap selects the region directly
+      // (no click-event supression dance needed — selection happens here)
+      if(!moved && !pinched) handleMapTap(e.clientX, e.clientY);
     }
   }
   svg.addEventListener('pointerup', endPointer);
@@ -351,13 +352,20 @@ function updateTimer(){
 }
 function regionEls(){ return $('map').querySelectorAll('path.region'); }
 
-$('map').addEventListener('click', e => {
-  const t = e.target.closest('[data-id]');
-  if(!t || !G) return;
+/* Tap-to-select that works for mouse AND touch.
+   We resolve the tapped region from the pointer coordinates instead of the
+   click event: setPointerCapture() (used for pinch zoom above) retargets the
+   follow-up click to the svg element on desktop browsers, so a click handler
+   using e.target never sees the country path. */
+function handleMapTap(clientX, clientY){
+  if(!G) return;
+  const el = document.elementFromPoint(clientX, clientY);
+  const t = el && el.closest ? el.closest('[data-id]') : null;
+  if(!t) return;
   const id = t.getAttribute('data-id');
   if(G.correct.has(id) || G.missed.has(id)) return;
   selectRegion(id);
-});
+}
 function selectRegion(id){
   G.selected = id;
   $('game-hint').classList.add('hidden'); // hint served its purpose: first tap made
@@ -415,6 +423,19 @@ function skipSelected(){
   if(!G || !G.selected) return;
   hideAnswer();
 }
+function recordGameStats(){
+  // Record a completed OR abandoned session. Abandoned sessions only count
+  // if the player actually answered something (so card stats stop saying
+  // "Not played yet" after a partial run, without spamming empty sessions).
+  if(!G) return;
+  const total = G.places.length;
+  const score = total ? Math.round(G.correct.size/total*100) : 0;
+  const gs = gameStore(G.modeId);
+  gs.scores.push(score); gs.scores = gs.scores.slice(-3);
+  gs.best = Math.max(gs.best, score); gs.played++;
+  if(G.correct.size > (gs.bestScore || 0)){ gs.bestScore = G.correct.size; gs.bestTotal = total; }
+  saveStore();
+}
 function endGame(reason){
   if(!G) return;
   clearInterval(G.timerId);
@@ -422,12 +443,9 @@ function endGame(reason){
   G.places.forEach(p => {
     if(!G.correct.has(p.id) && !G.missed.has(p.id)) practiceAdd(G.modeId, p.id);
   });
+  recordGameStats();
   const score = total ? Math.round(G.correct.size/total*100) : 0;
   const gs = gameStore(G.modeId);
-  gs.scores.push(score); gs.scores = gs.scores.slice(-3);
-  gs.best = Math.max(gs.best, score); gs.played++;
-  if(G.correct.size > (gs.bestScore || 0)){ gs.bestScore = G.correct.size; gs.bestTotal = total; }
-  saveStore();
   $('res-title').textContent = G.title;
   $('res-score').textContent = `${G.correct.size}/${total}`;
   const why = reason==='lives' ? '3 wrong answers — game over!'
@@ -633,15 +651,32 @@ function learnSkip(){
 }
 
 /* ---------------- theme ---------------- */
+/* Dedicated localStorage key so the theme survives any game-store rewrite,
+   plus an inline <head> script (index.html) applies it before first paint.
+   Falls back to the legacy store.settings.dark for existing users. */
+const THEME_KEY = 'mapChallenge.theme';
+function currentTheme(){
+  try{
+    const t = localStorage.getItem(THEME_KEY);
+    if(t === 'dark' || t === 'light') return t;
+    const s = JSON.parse(localStorage.getItem(KEY) || '{}');
+    return (s.settings && s.settings.dark) ? 'dark' : 'light';
+  }catch(e){ return 'light'; }
+}
 function applyTheme(){
-  const dark = !!(store.settings && store.settings.dark);
+  const dark = currentTheme() === 'dark';
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  $('theme-btn').innerHTML = dark ? '&#9788;' : '&#9790;';
+  const b = $('theme-btn'); if(b) b.innerHTML = dark ? '&#9788;' : '&#9790;';
 }
 function toggleTheme(){
-  store.settings = store.settings || {};
-  store.settings.dark = !(store.settings.dark);
-  saveStore(); applyTheme();
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+  try{
+    store.settings = store.settings || {};
+    store.settings.dark = (next === 'dark');
+    saveStore();
+  }catch(e){}
+  applyTheme();
 }
 
 /* ---------------- misc ---------------- */
@@ -662,18 +697,18 @@ function init(){
   renderHome();
   $('theme-btn').addEventListener('click', toggleTheme);
   $('home-btn').addEventListener('click', () => {
-    if(G){ clearInterval(G.timerId); G = null; }
+    if(G){
+      clearInterval(G.timerId);
+      // abandoned mid-session: still record it if anything was answered
+      if(G.correct.size + G.missed.size > 0) recordGameStats();
+      G = null;
+    }
     L = null;
     renderHome(); showView('view-home');
   });
   $('continent-back').addEventListener('click', () => showView('view-home'));
   $('answer-submit').addEventListener('click', submitAnswer);
   $('answer-skip').addEventListener('click', skipSelected);
-  // swallow the tap that ends a pan/pinch/double-tap-zoom so it never selects a region
-  $('map-wrap').addEventListener('click', e => {
-    const z = $('map')._zoom;
-    if(z && z.suppress){ e.stopPropagation(); e.preventDefault(); z.suppress = false; }
-  }, true);
   $('zoom-in').addEventListener('click', () => { if(G && G.zoom) G.zoom.zoomCenter(1.6); });
   $('zoom-out').addEventListener('click', () => { if(G && G.zoom) G.zoom.zoomCenter(1/1.6); });
   $('zoom-reset').addEventListener('click', () => { if(G && G.zoom) G.zoom.reset(); });

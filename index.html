@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="description" content="Map Challenge — a geography quiz game. Name countries, capitals, and states.">
+<script>/* apply saved theme before first paint (no light-flash) */
+try{var __t=localStorage.getItem('mapChallenge.theme');
+if(__t!=='dark'&&__t!=='light'){try{var __s=JSON.parse(localStorage.getItem('mapChallenge.v1')||'{}');
+__t=(__s.settings&&__s.settings.dark)?'dark':'light';}catch(__e){__t='light';}}
+document.documentElement.setAttribute('data-theme',__t);}catch(__e){}</script>
 <title>Map Challenge</title>
 <link rel="stylesheet" href="styles.css">
 </head>

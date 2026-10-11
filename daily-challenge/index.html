@@ -8,6 +8,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Daily Challenge">
 <meta name="theme-color" content="#1f6f4a">
+<script>/* apply saved theme before first paint (shared key with Map Challenge home) */
+try{var __t=localStorage.getItem('mapChallenge.theme');
+if(__t!=='dark'&&__t!=='light'){try{var __s=JSON.parse(localStorage.getItem('mapChallenge.v1')||'{}');
+__t=(__s.settings&&__s.settings.dark)?'dark':'light';}catch(__e){__t='light';}}
+document.documentElement.setAttribute('data-theme',__t);}catch(__e){}</script>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/atlas-180.png">
 <title>Daily Challenge — guess the country</title>
@@ -68,6 +73,30 @@
   .tiny-link { display:block; text-align:center; color:#6b6f7a; font-size:14px;
                margin-top:14px; background:none; border:none; text-decoration:underline; cursor:pointer; }
   .note { font-size:13px; color:#6b6f7a; text-align:center; margin-top:10px; }
+  .theme-btn { margin-left:auto; background:#fff; border:none; border-radius:999px; padding:11px 16px;
+               font-size:16px; cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .theme-btn:active { transform:scale(.96); }
+  /* dark mode (shared theme key with Map Challenge home) */
+  html[data-theme="dark"] body { background:#141821; color:#e8ebf2; }
+  html[data-theme="dark"] .card { background:#1e2532; box-shadow:0 2px 10px rgba(0,0,0,.3); }
+  html[data-theme="dark"] .sub, html[data-theme="dark"] .note, html[data-theme="dark"] .tiny-link,
+  html[data-theme="dark"] .rank-sub, html[data-theme="dark"] .stat .l,
+  html[data-theme="dark"] .modal p { color:#9aa3b5; }
+  html[data-theme="dark"] .btn-primary { background:#e8ebf2; color:#141821; }
+  html[data-theme="dark"] .btn-secondary { background:#2a3342; color:#e8ebf2; }
+  html[data-theme="dark"] .home-top a, html[data-theme="dark"] .theme-btn { background:#1e2532; color:#e8ebf2;
+      box-shadow:0 2px 10px rgba(0,0,0,.3); }
+  html[data-theme="dark"] .stat { background:#1e2532; box-shadow:0 2px 10px rgba(0,0,0,.3); }
+  html[data-theme="dark"] #shapeImg { background:#1e2532; }
+  html[data-theme="dark"] .topbar .pill { background:#1e2532; box-shadow:0 2px 10px rgba(0,0,0,.3); }
+  html[data-theme="dark"] .opt { background:#1e2532; border-color:#3a4356; color:#e8ebf2; }
+  html[data-theme="dark"] .opt.correct { background:#123f2b; border-color:#2f9e5f; color:#b9f0d2; }
+  html[data-theme="dark"] .opt.wrong { background:#4a1f1f; border-color:#d64545; color:#f5c6c6; }
+  html[data-theme="dark"] .board-row { border-bottom-color:#2a3342; }
+  html[data-theme="dark"] .board-row .r { color:#9aa3b5; }
+  html[data-theme="dark"] .modal { background:#1e2532; }
+  html[data-theme="dark"] .modal input { background:#141821; border-color:#3a4356; color:#e8ebf2; }
+  html[data-theme="dark"] .modal .err { color:#e08080; }
 </style>
 </head>
 <body>
@@ -75,7 +104,7 @@
 
   <!-- MENU -->
   <div id="screen-menu" class="screen on">
-    <div class="home-top"><a href=".." title="Map Challenge home">⌂ Map Challenge</a></div>
+    <div class="home-top"><a href=".." title="Map Challenge home">⌂ Map Challenge</a><button id="btn-theme" class="theme-btn" aria-label="Toggle dark mode">🌙</button></div>
     <h1>🌍 Daily Challenge</h1>
     <p class="sub">30 countries. Shape only. How many can you name?</p>
     <div class="stats">
@@ -443,6 +472,13 @@ document.addEventListener('DOMContentLoaded',function(){
   el('btn-menu').onclick=function(){refreshMenu();show('screen-menu');};
   el('btn-menu2').onclick=function(){refreshMenu();show('screen-menu');};
   el('btn-name').onclick=function(){openNameModal();};
+  el('btn-theme').onclick=function(){
+    var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+    try{localStorage.setItem('mapChallenge.theme',cur);}catch(e){}
+    document.documentElement.setAttribute('data-theme',cur);
+    el('btn-theme').textContent=cur==='dark'?'☀':'🌙';
+  };
+  el('btn-theme').textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀':'🌙';
   el('name-go').onclick=nameGo;
   el('name-cancel').onclick=closeNameModal;
   el('btn-share').onclick=function(){
