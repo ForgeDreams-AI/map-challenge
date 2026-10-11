@@ -322,6 +322,11 @@ function startGame(modeId, continent){
   G.zoom = initZoom(svg, {x:bx, y:by, w:bw, h:bh});
   $('hud-score').textContent = `0 / ${places.length}`;
   $('hud-wrong').textContent = '❌ 0/3';
+  // 10-second onboarding: one line that tells a first-timer exactly what to do
+  const regionWord = m.kind === 'us' ? 'state' : 'country';
+  const how = m.answer === 'capital' ? `, then type its capital` : ` to name it`;
+  $('game-hint').textContent = `👆 Tap a ${regionWord}${how}`;
+  $('game-hint').classList.remove('hidden');
   updateTimer();
   hideAnswer();
   showView('view-game');
@@ -355,6 +360,7 @@ $('map').addEventListener('click', e => {
 });
 function selectRegion(id){
   G.selected = id;
+  $('game-hint').classList.add('hidden'); // hint served its purpose: first tap made
   regionEls().forEach(p => p.classList.toggle('selected', p.getAttribute('data-id') === id));
   const place = G.byId.get(id);
   $('answer-q').textContent = G.answerKind === 'capital'

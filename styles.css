@@ -7,10 +7,10 @@
   --shadow:0 6px 20px rgba(122,90,58,.14);
 }
 [data-theme="dark"]{
-  --bg:#1e1a14; --card:#2a241c; --ink:#efe6d4; --muted:#a2937a;
+  --bg:#1e1a14; --card:#241f16; --ink:#efe6d4; --muted:#a2937a;
   --accent:#d08a4e; --blue:#7ba08e;
   --good:#7fae7a; --bad:#d0695a; --line:#3d342a;
-  --land:#3a3f2e; --land-stroke:#5c6647; --hover:#4a5238;
+  --land:#474e35; --land-stroke:#78845c; --hover:#5c6344;
   --shadow:0 6px 20px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -76,6 +76,11 @@ body{
 }
 .hud-chip.timer.low{color:var(--bad);border-color:var(--bad);animation:pulse 1s infinite;}
 @keyframes pulse{50%{opacity:.6;}}
+
+/* first-tap onboarding hint: tells a first-timer exactly what to do */
+.game-hint{
+  text-align:center;color:var(--muted);font-size:.95rem;margin:2px 0 8px;
+}
 
 /* map */
 #map-wrap,#learn-wrap{
