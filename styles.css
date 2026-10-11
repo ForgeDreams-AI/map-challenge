@@ -171,6 +171,22 @@ body{
   .view{padding-bottom:20px;}
 }
 
+/* rotate hint: portrait phones only — landscape already renders the map ~1.7x bigger */
+.rotate-tip{display:none;}
+
+@media (max-width:700px) and (orientation:portrait){
+  /* A 2:1 world map is width-bound on portrait: the only way to render it larger
+     without cropping countries off-screen is to give it the full screen width. */
+  #map-wrap,#learn-wrap{
+    margin-left:-14px;margin-right:-14px;
+    border-radius:0;border-left:none;border-right:none;
+  }
+  .rotate-tip{
+    display:block;text-align:center;color:var(--muted);
+    font-size:.82rem;margin:10px 0 0;
+  }
+}
+
 @media (min-width:700px){
   .cards{grid-template-columns:repeat(3,1fr);}
   .topbar h1{font-size:2rem;}

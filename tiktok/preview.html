@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Map Challenge — TikTok build preview (browser test only)</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#f5f0e6;height:100%;}
+  canvas{display:block;touch-action:none;}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- DEV ONLY: mirrors the TikTok upload bundle for browser testing.
+     The real TikTok package is dist/tiktok-game.js (see build.sh). -->
+<script src="src/00-env.js"></script>
+<script src="src/10-util.js"></script>
+<script src="data/data-world.js"></script>
+<script src="data/data-us.js"></script>
+<script src="src/30-daily-data.js"></script>
+<script src="src/40-mapquiz.js"></script>
+<script src="src/50-daily.js"></script>
+<script src="src/60-path.js"></script>
+<script src="src/70-ui.js"></script>
+<script src="src/80-views-map.js"></script>
+<script src="src/90-views-daily.js"></script>
+<script src="src/95-game.js"></script>
+</body>
+</html>
