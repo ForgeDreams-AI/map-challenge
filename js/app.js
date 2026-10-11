@@ -124,6 +124,16 @@ function statsLine(id){
 }
 function renderHome(){
   const wrap = $('cards'); wrap.innerHTML = '';
+  /* Daily Challenge: separate terrain-guessing game, lives in daily-challenge/ */
+  const dc = document.createElement('div');
+  dc.className = 'card';
+  dc.innerHTML = `<div class="thumb">${thumbSVG('world')}</div>
+    <h3>Daily Challenge</h3><p class="stats">30 countries from their terrain — new every day, one shot</p>
+    <div class="card-btns">
+      <button class="btn primary" data-act="play">Play</button>
+    </div>`;
+  dc.querySelector('[data-act="play"]').addEventListener('click', () => { location.href = 'daily-challenge/'; });
+  wrap.appendChild(dc);
   MODES.forEach(m => {
     const card = document.createElement('div');
     card.className = 'card';
