@@ -1,16 +1,18 @@
-/* Map Challenge — earthy theme */
+/* Map Challenge — earthy theme, crisp cartography pass */
 :root{
   --bg:#f5f0e6; --card:#fffdf8; --ink:#3a3129; --muted:#8a7a64;
   --accent:#b4663a; --accent-ink:#fffaf2; --blue:#3f6b5e;
   --good:#5e8f5a; --bad:#b04a3a; --line:#e3d5bd;
-  --land:#dfe3cf; --land-stroke:#a9b18c; --hover:#cdd6b4;
+  --land:#e6ebcf; --land-stroke:#141414; --hover:#d4dcab;
+  --water:#c8dcea;
   --shadow:0 6px 20px rgba(122,90,58,.14);
 }
 [data-theme="dark"]{
   --bg:#1e1a14; --card:#241f16; --ink:#efe6d4; --muted:#a2937a;
   --accent:#d08a4e; --blue:#7ba08e;
   --good:#7fae7a; --bad:#d0695a; --line:#3d342a;
-  --land:#474e35; --land-stroke:#78845c; --hover:#5c6344;
+  --land:#4c5437; --land-stroke:#ece4d2; --hover:#616b46;
+  --water:#1c232d;
   --shadow:0 6px 20px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -18,7 +20,9 @@ html,body{margin:0;padding:0;}
 body{
   font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
   background:var(--bg); color:var(--ink); min-height:100vh;
-  touch-action:manipulation;
+  /* page scrolls, but the browser never pinch-zooms the page:
+     map zoom is handled by the map's own pinch/buttons instead */
+  touch-action:pan-x pan-y;
 }
 .hidden{display:none !important;}
 .view{max-width:1100px;margin:0 auto;padding:12px 14px 40px;}
@@ -43,12 +47,12 @@ body{
   padding:12px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;
 }
 .card .thumb{
-  border-radius:14px;overflow:hidden;background:var(--land);aspect-ratio:2/1;
+  border-radius:14px;overflow:hidden;background:var(--water);aspect-ratio:2/1;
   display:flex;align-items:center;justify-content:center;
 }
 .card .thumb svg{width:100%;height:100%;display:block;}
-.card .thumb path{fill:var(--land);stroke:var(--land-stroke);stroke-width:1.5;}
-.card .thumb path.hl{fill:var(--accent);stroke:#8f4e2a;stroke-width:1.5;}
+.card .thumb path{fill:var(--land);stroke:var(--land-stroke);stroke-width:3;}
+.card .thumb path.hl{fill:var(--accent);stroke:#8f4e2a;stroke-width:3;}
 .card h3{margin:0;font-size:1.02rem;text-align:center;}
 .card .stats{margin:0;text-align:center;color:var(--muted);font-size:.85rem;min-height:2.4em;}
 .card-btns{display:flex;gap:8px;}
@@ -89,7 +93,12 @@ body{
 }
 #map-wrap{position:relative;}
 #map,#learn-map{display:block;width:100%;height:auto;max-height:62vh;}
-#map{touch-action:none;} /* pinch/zoom gestures stay on the map, never the page */
+/* pinch/zoom gestures stay on the maps, never the page (both game + learn) */
+#map,#learn-map{touch-action:none;}
+/* water backdrop: covers the base viewBox, pans/zooms with the map */
+#map rect.water,#learn-map rect.water,#res-map rect.water{
+  fill:var(--water);pointer-events:none;
+}
 .zoom-ctrls{
   position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:8px;z-index:5;
 }
@@ -101,16 +110,16 @@ body{
 }
 .zoom-ctrls button:active{transform:scale(.94);}
 #map path.region,#learn-map path.region{
-  fill:var(--land);stroke:var(--land-stroke);stroke-width:.8;cursor:pointer;
+  fill:var(--land);stroke:var(--land-stroke);stroke-width:1.5;cursor:pointer;
   transition:fill .15s;
 }
 #map path.region:hover,#learn-map path.region:hover{fill:var(--hover);}
-#map path.region.selected{stroke:var(--accent);stroke-width:2.5;}
-#map path.region.correct{fill:var(--good);stroke:#1e8f52;cursor:default;}
-#map path.region.missed{fill:var(--bad);stroke:#c93a3a;cursor:default;opacity:.75;}
+#map path.region.selected{stroke:var(--accent);stroke-width:3;}
+#map path.region.correct{fill:var(--good);stroke:#1e7a44;stroke-width:1.5;cursor:default;}
+#map path.region.missed{fill:var(--bad);stroke:#a83226;stroke-width:1.5;cursor:default;opacity:.75;}
 #learn-map path.region{cursor:default;}
 #learn-map path.region.target{
-  fill:var(--accent);stroke:#8f4e2a;stroke-width:2;
+  fill:var(--accent);stroke:#8f4e2a;stroke-width:2.5;
   animation:targetpulse 1.2s infinite;
 }
 @keyframes targetpulse{50%{opacity:.55;}}
@@ -124,7 +133,7 @@ body{
 .answer-q{font-weight:700;font-size:1.05rem;margin-bottom:10px;text-align:center;}
 .ac-wrap{position:relative;}
 #answer-input,#learn-input{
-  width:100%;padding:14px;font-size:1.1rem;border-radius:14px;
+  width:100%;padding:14px;font-size:16px;border-radius:14px;
   border:2px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;
 }
 #answer-input:focus,#learn-input:focus{outline:none;border-color:var(--accent);}
@@ -199,7 +208,7 @@ body{
 .result-map-wrap{margin-top:14px;}
 #res-map{width:100%;height:auto;display:block;background:var(--card);
   border:2px solid var(--line);border-radius:20px;box-shadow:var(--shadow);}
-#res-map path{fill:var(--muted);opacity:.4;stroke:var(--card);stroke-width:1;}
+#res-map path{fill:var(--muted);opacity:.4;stroke:var(--land-stroke);stroke-width:1.2;}
 #res-map path.correct{fill:var(--good);opacity:1;}
 #res-map path.missed{fill:var(--bad);opacity:1;}
 .map-legend{display:flex;gap:16px;justify-content:center;margin-top:10px;

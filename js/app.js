@@ -174,11 +174,16 @@ function showContinentPicker(modeId){
 
 /* ---------------- fat-finger hit areas for tiny countries ---------------- */
 const HIT_MIN_PX = 16;  // minimum on-screen hit radius, px
-const SMALL_DIAG = 16;  // svg units: bbox diagonal below this => tiny country
+// generous threshold: any country rendering smaller than ~16px diagonal on a
+// phone at default zoom gets an invisible enlarged tap circle (covers all
+// microstates like Vatican City / Monaco / Nauru plus small states like
+// Belgium / Netherlands / Switzerland).
+const SMALL_DIAG = 40;  // svg units: bbox diagonal below this => needs a hit circle
 function addHitAreas(svg){
   const NS = 'http://www.w3.org/2000/svg';
   svg.querySelectorAll('path.region').forEach(p => {
     let b; try { b = p.getBBox(); } catch(e){ return; }
+    p._bbox = b; // cache: user-space units, unaffected by zoom — reused by tap resolution
     const diag = Math.hypot(b.width, b.height);
     if(diag >= SMALL_DIAG) return;
     const c = document.createElementNS(NS, 'circle');
@@ -312,14 +317,15 @@ function startGame(modeId, continent){
     : `0 0 ${window.WORLD_DATA.w} ${window.WORLD_DATA.h}`;
   const svg = $('map');
   svg.setAttribute('viewBox', vb);
-  svg.innerHTML = places.map(p =>
-    `<path class="region" data-id="${p.id}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`
-  ).join('');
+  const [bx, by, bw, bh] = vb.split(' ').map(Number);
+  svg.innerHTML = `<rect class="water" x="${bx}" y="${by}" width="${bw}" height="${bh}"/>` +
+    places.map(p =>
+      `<path class="region" data-id="${p.id}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`
+    ).join('');
   // addHitAreas runs after showView below (getBBox needs layout)
   G = {modeId, title:m.title + (continent ? ' — ' + continent : ''), answerKind:m.answer,
        places, byId, correct:new Set(), missed:new Set(), wrong:0,
        timeLeft:1800, timerId:null, selected:null, continent};
-  const [bx, by, bw, bh] = vb.split(' ').map(Number);
   G.zoom = initZoom(svg, {x:bx, y:by, w:bw, h:bh});
   $('hud-score').textContent = `0 / ${places.length}`;
   $('hud-wrong').textContent = '❌ 0/3';
@@ -353,16 +359,38 @@ function updateTimer(){
 function regionEls(){ return $('map').querySelectorAll('path.region'); }
 
 /* Tap-to-select that works for mouse AND touch.
-   We resolve the tapped region from the pointer coordinates instead of the
-   click event: setPointerCapture() (used for pinch zoom above) retargets the
-   follow-up click to the svg element on desktop browsers, so a click handler
-   using e.target never sees the country path. */
+   Resolution is path-first: the tap point is tested against the actual country
+   shapes (isPointInFill), so enlarged hit circles for microstates can never
+   steal a tap that visibly landed on a neighboring country. Only when the tap
+   hits no real path do we fall back to the invisible hit circles — that's what
+   makes 2px microstates tappable at default zoom. */
 function handleMapTap(clientX, clientY){
   if(!G) return;
-  const el = document.elementFromPoint(clientX, clientY);
-  const t = el && el.closest ? el.closest('[data-id]') : null;
-  if(!t) return;
-  const id = t.getAttribute('data-id');
+  const svg = $('map');
+  let id = null;
+  const pt = svgPoint(svg, clientX, clientY);
+  if(pt){
+    let bestArea = Infinity;
+    const paths = svg.querySelectorAll('path.region');
+    for(let i = 0; i < paths.length; i++){
+      const p = paths[i];
+      let b = p._bbox;
+      if(!b){ try { b = p.getBBox(); } catch(e){ continue; } }
+      if(pt.x < b.x || pt.x > b.x + b.width || pt.y < b.y || pt.y > b.y + b.height) continue;
+      let inside = false;
+      try { inside = p.isPointInFill(pt); } catch(e){}
+      if(inside){
+        const area = b.width * b.height;
+        if(area < bestArea){ bestArea = area; id = p.getAttribute('data-id'); }
+      }
+    }
+  }
+  if(!id){
+    const el = document.elementFromPoint(clientX, clientY);
+    const t = el && el.closest ? el.closest('circle.hit[data-id]') : null;
+    if(t) id = t.getAttribute('data-id');
+  }
+  if(!id) return;
   if(G.correct.has(id) || G.missed.has(id)) return;
   selectRegion(id);
 }
@@ -465,10 +493,12 @@ function endGame(reason){
 function renderResultsMap(){
   const svg = $('res-map');
   let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-  svg.innerHTML = G.places.map(p => {
+  const pathsHtml = G.places.map(p => {
     const cls = G.correct.has(p.id) ? 'correct' : G.missed.has(p.id) ? 'missed' : 'unasked';
     return `<path class="${cls}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`;
   }).join('');
+  // measure via a temp render, then rebuild with a water backdrop
+  svg.innerHTML = pathsHtml;
   svg.querySelectorAll('path').forEach(el => {
     try{
       const b = el.getBBox();
@@ -478,10 +508,13 @@ function renderResultsMap(){
   });
   if(!isFinite(minX)){
     svg.setAttribute('viewBox', `0 0 ${window.WORLD_DATA.w} ${window.WORLD_DATA.h}`);
+    svg.innerHTML = `<rect class="water" x="0" y="0" width="${window.WORLD_DATA.w}" height="${window.WORLD_DATA.h}"/>` + pathsHtml;
     return;
   }
   const pad = Math.max(24, (maxX-minX)*0.1);
-  svg.setAttribute('viewBox', `${minX-pad} ${minY-pad} ${maxX-minX+pad*2} ${maxY-minY+pad*2}`);
+  const vx = minX-pad, vy = minY-pad, vw = maxX-minX+pad*2, vh = maxY-minY+pad*2;
+  svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+  svg.innerHTML = `<rect class="water" x="${vx}" y="${vy}" width="${vw}" height="${vh}"/>` + pathsHtml;
 }
 function shareResult(){
   const title = $('res-title').textContent;
@@ -575,11 +608,16 @@ function startLearn(modeId){
                    : `0 0 ${window.WORLD_DATA.w} ${window.WORLD_DATA.h}`;
   const svg = $('learn-map');
   svg.setAttribute('viewBox', vb);
-  svg.innerHTML = places.map(p =>
-    `<path class="region" data-id="${p.id}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`
-  ).join('');
+  const [lx, ly, lw, lh] = vb.split(' ').map(Number);
+  svg.innerHTML = `<rect class="water" x="${lx}" y="${ly}" width="${lw}" height="${lh}"/>` +
+    places.map(p =>
+      `<path class="region" data-id="${p.id}" d="${p.path}"><title>${escapeHtml(p.name)}</title></path>`
+    ).join('');
   L = {modeId, title:m.title, answerKind:m.answer, queue:ids, byId,
        streaks:new Map(), current:null};
+  // learn map gets the same map-only pinch-zoom/pan as the game map
+  // (touch-action:none in CSS keeps the page itself from zooming)
+  L.zoom = initZoom(svg, {x:lx, y:ly, w:lw, h:lh});
   $('learn-empty').classList.add('hidden');
   $('learn-panel').classList.remove('hidden');
   showView('view-learn');
@@ -734,6 +772,11 @@ function init(){
     () => (G ? [...new Set(G.places.map(p => answerOf(p, G.answerKind)))] : []));
   attachAutocomplete($('learn-input'), $('learn-ac'),
     () => (L ? [...new Set([...L.byId.values()].map(p => answerOf(p, L.answerKind)))] : []));
+  // belt-and-suspenders page-zoom lock for older iOS: the viewport meta already
+  // forbids page zoom; this kills the legacy pinch gesture too. Map zoom is
+  // unaffected (it uses its own pointer handlers + touch-action:none).
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('gesturechange', e => e.preventDefault());
   showView('view-home');
 }
 document.addEventListener('DOMContentLoaded', init);
