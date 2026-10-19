@@ -184,12 +184,16 @@ body{
 .rotate-tip{display:none;}
 
 @media (max-width:700px) and (orientation:portrait){
-  /* A 2:1 world map is width-bound on portrait: the only way to render it larger
-     without cropping countries off-screen is to give it the full screen width. */
+  /* Portrait phones: the map frame goes tall (58vh) and the map fills it via
+     a full-height vertical slice (see portraitView in app.js) — the map
+     renders ~2.5x bigger than the old 2:1 strip, and drag/pinch still reach
+     every country. JS mirrors the 58vh constant. */
   #map-wrap,#learn-wrap{
     margin-left:-14px;margin-right:-14px;
     border-radius:0;border-left:none;border-right:none;
+    height:58vh;
   }
+  #map,#learn-map{height:100%;max-height:none;}
   .rotate-tip{
     display:block;text-align:center;color:var(--muted);
     font-size:.82rem;margin:10px 0 0;

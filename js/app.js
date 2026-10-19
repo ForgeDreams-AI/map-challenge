@@ -211,17 +211,34 @@ function sizeHitAreas(svg){
 
 /* ---------------- map zoom (map only — never the page) ---------------- */
 const ZMAX = 12; // max zoom: enough to tap the tiniest countries
+/* Portrait phones: the map frame is tall (58vh in CSS). Return a full-height
+   vertical slice to start on, so the map renders ~2.5x bigger than the old
+   2:1 strip. Null = default full-map view. */
+function portraitView(full){
+  try{
+    if(!(window.matchMedia && matchMedia('(max-width: 700px) and (orientation: portrait)').matches)) return null;
+    const wpx = window.innerWidth, hpx = window.innerHeight * 0.58; // mirrors the 58vh CSS
+    if(!wpx || !hpx) return null;
+    const h = full.h, w = Math.min(full.w, full.h * wpx / hpx);
+    return {x: full.x + (full.w - w) / 2, y: full.y, w, h};
+  }catch(e){ return null; }
+}
 function svgPoint(svg, clientX, clientY){
   const m = svg.getScreenCTM();
   if(!m) return null;
   return new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
 }
-function initZoom(svg, base){
-  const z = {scale:1, cx:base.x + base.w/2, cy:base.y + base.h/2};
+function initZoom(svg, view, bounds){
+  // view: the starting viewBox. bounds: pan/zoom limits (defaults to view).
+  // On portrait phones view is the tall slice while bounds stay the full
+  // world, so panning can reach every country; reset() returns to the view.
+  bounds = bounds || view;
+  const freePan = bounds.w > view.w || bounds.h > view.h;
+  const z = {scale:1, cx:view.x + view.w/2, cy:view.y + view.h/2};
   function apply(){
-    const w = base.w / z.scale, h = base.h / z.scale;
-    z.cx = Math.max(base.x + w/2, Math.min(base.x + base.w - w/2, z.cx));
-    z.cy = Math.max(base.y + h/2, Math.min(base.y + base.h - h/2, z.cy));
+    const w = view.w / z.scale, h = view.h / z.scale;
+    z.cx = Math.max(bounds.x + w/2, Math.min(bounds.x + bounds.w - w/2, z.cx));
+    z.cy = Math.max(bounds.y + h/2, Math.min(bounds.y + bounds.h - h/2, z.cy));
     svg.setAttribute('viewBox', `${z.cx - w/2} ${z.cy - h/2} ${w} ${h}`);
     sizeHitAreas(svg);
   }
@@ -240,9 +257,10 @@ function initZoom(svg, base){
     zoomAt(svgPoint(svg, r.left + r.width/2, r.top + r.height/2), factor);
   }
   function reset(){
-    z.scale = 1; z.cx = base.x + base.w/2; z.cy = base.y + base.h/2; apply();
+    z.scale = 1; z.cx = view.x + view.w/2; z.cy = view.y + view.h/2; apply();
   }
-  // pinch to zoom + drag to pan (single-finger drag only pans when zoomed in)
+  // pinch to zoom + drag to pan (single-finger drag only pans when zoomed in,
+  // or on portrait phones where the tall slice starts panning immediately)
   const ptrs = new Map();
   let pinchD0 = 0, pinchS0 = 1, moved = false, pinched = false, downX = 0, downY = 0;
   let lastTapT = 0, lastTapX = 0, lastTapY = 0;
@@ -268,11 +286,11 @@ function initZoom(svg, base){
         zoomAt(svgPoint(svg, midX, midY), (pinchS0 * (d / pinchD0)) / z.scale);
       }
       moved = true;
-    } else if(ptrs.size === 1 && z.scale > 1){
+    } else if(ptrs.size === 1 && (z.scale > 1 || freePan)){
       if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 8) moved = true;
       if(moved){
         const r = svg.getBoundingClientRect();
-        const vbw = (base.w / z.scale), vbh = (base.h / z.scale);
+        const vbw = (view.w / z.scale), vbh = (view.h / z.scale);
         z.cx -= (e.clientX - prev.x) * (vbw / r.width);
         z.cy -= (e.clientY - prev.y) * (vbh / r.height);
         apply();
@@ -303,6 +321,7 @@ function initZoom(svg, base){
     zoomAt(svgPoint(svg, e.clientX, e.clientY), e.deltaY < 0 ? 1.3 : 1/1.3);
   }, {passive:false});
   svg._zoom = z;
+  reset(); // apply the starting view immediately (home slice on portrait phones)
   return {zoomCenter, reset};
 }
 
@@ -326,7 +345,7 @@ function startGame(modeId, continent){
   G = {modeId, title:m.title + (continent ? ' — ' + continent : ''), answerKind:m.answer,
        places, byId, correct:new Set(), missed:new Set(), wrong:0,
        timeLeft:1800, timerId:null, selected:null, continent};
-  G.zoom = initZoom(svg, {x:bx, y:by, w:bw, h:bh});
+  G.zoom = initZoom(svg, portraitView({x:bx, y:by, w:bw, h:bh}) || {x:bx, y:by, w:bw, h:bh}, {x:bx, y:by, w:bw, h:bh});
   $('hud-score').textContent = `0 / ${places.length}`;
   $('hud-wrong').textContent = '❌ 0/3';
   // 10-second onboarding: one line that tells a first-timer exactly what to do
@@ -405,7 +424,9 @@ function selectRegion(id){
   $('answer-input').value = '';
   hideAC('ac-list');
   $('answer-panel').classList.remove('hidden');
-  setTimeout(() => $('answer-input').focus(), 50);
+  // keyboard overlays instead of shoving the layout: no auto-scroll, then
+  // nudge the panel into view only as much as needed
+  setTimeout(() => { const i = $('answer-input'); i.focus({preventScroll:true}); i.scrollIntoView({block:'nearest'}); }, 50);
 }
 function hideAnswer(){
   $('answer-panel').classList.add('hidden');
@@ -617,7 +638,7 @@ function startLearn(modeId){
        streaks:new Map(), current:null};
   // learn map gets the same map-only pinch-zoom/pan as the game map
   // (touch-action:none in CSS keeps the page itself from zooming)
-  L.zoom = initZoom(svg, {x:lx, y:ly, w:lw, h:lh});
+  L.zoom = initZoom(svg, portraitView({x:lx, y:ly, w:lw, h:lh}) || {x:lx, y:ly, w:lw, h:lh}, {x:lx, y:ly, w:lw, h:lh});
   $('learn-empty').classList.add('hidden');
   $('learn-panel').classList.remove('hidden');
   showView('view-learn');
@@ -651,7 +672,7 @@ function nextLearn(){
   $('learn-left').textContent = `${L.queue.length} left to master`;
   const st = L.streaks.get(id) || 0;
   $('learn-streak').textContent = `Streak ${st}/2`;
-  setTimeout(() => $('learn-input').focus(), 50);
+  setTimeout(() => { const i = $('learn-input'); i.focus({preventScroll:true}); i.scrollIntoView({block:'nearest'}); }, 50);
 }
 function learnSubmit(){
   if(!L || !L.current || L.locked) return;
